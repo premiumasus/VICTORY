@@ -127,11 +127,194 @@ end
 -- ========================================
 
 local function LoadMainScript()
-    loadstring(game:HttpGet("https://pastebin.com/raw/e2setW0K"))()
+    -- ===================================================
+    -- >>> ESP BOX LOGIC WITH TOGGLE <<<
+    -- ===================================================
+    local ESP_Settings = {
+        Enabled = true, -- สวิตช์สำหรับ เปิด (true) / ปิด (false) ESP BOX
+        Box_Color = Color3.fromRGB(255, 0, 0),
+        Tracer_Color = Color3.fromRGB(255, 0, 0),
+        Tracer_Thickness = 1,
+        Box_Thickness = 1,
+        Tracer_Origin = "Bottom",
+        Tracer_FollowMouse = false,
+        Tracers = true
+    }
     
-    -- ===================================================
-    -- >>> ใส่โค้ดสคริปต์หลักของคุณที่นี่ได้เลย <<<
-    -- ===================================================
+    local Team_Check = {
+        TeamCheck = false,
+        Green = Color3.fromRGB(0, 255, 0),
+        Red = Color3.fromRGB(255, 0, 0)
+    }
+    local TeamColor = true
+
+    local player = game:GetService("Players").LocalPlayer
+    local camera = game:GetService("Workspace").CurrentCamera
+    local mouse = player:GetMouse()
+
+    local function NewQuad(thickness, color)
+        local quad = Drawing.new("Quad")
+        quad.Visible = false
+        quad.PointA = Vector2.new(0,0)
+        quad.PointB = Vector2.new(0,0)
+        quad.PointC = Vector2.new(0,0)
+        quad.PointD = Vector2.new(0,0)
+        quad.Color = color
+        quad.Filled = false
+        quad.Thickness = thickness
+        quad.Transparency = 1
+        return quad
+    end
+
+    local function NewLine(thickness, color)
+        local line = Drawing.new("Line")
+        line.Visible = false
+        line.From = Vector2.new(0, 0)
+        line.To = Vector2.new(0, 0)
+        line.Color = color 
+        line.Thickness = thickness
+        line.Transparency = 1
+        return line
+    end
+
+    local function Visibility(state, lib)
+        for u, x in pairs(lib) do
+            x.Visible = state
+        end
+    end
+
+    local black = Color3.fromRGB(0, 0 ,0)
+    local function ESP(plr)
+        local library = {
+            blacktracer = NewLine(ESP_Settings.Tracer_Thickness*2, black),
+            tracer = NewLine(ESP_Settings.Tracer_Thickness, ESP_Settings.Tracer_Color),
+            black = NewQuad(ESP_Settings.Box_Thickness*2, black),
+            box = NewQuad(ESP_Settings.Box_Thickness, ESP_Settings.Box_Color),
+            healthbar = NewLine(3, black),
+            greenhealth = NewLine(1.5, black)
+        }
+
+        local function Colorize(color)
+            for u, x in pairs(library) do
+                if x ~= library.healthbar and x ~= library.greenhealth and x ~= library.blacktracer and x ~= library.black then
+                    x.Color = color
+                end
+            end
+        end
+
+        local function Updater()
+            local connection
+            connection = game:GetService("RunService").RenderStepped:Connect(function()
+                if not ESP_Settings.Enabled then
+                    Visibility(false, library)
+                    return
+                end
+
+                if plr.Character ~= nil and plr.Character:FindFirstChild("Humanoid") ~= nil and plr.Character:FindFirstChild("HumanoidRootPart") ~= nil and plr.Character.Humanoid.Health > 0 and plr.Character:FindFirstChild("Head") ~= nil then
+                    local HumPos, OnScreen = camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
+                    if OnScreen then
+                        local head = camera:WorldToViewportPoint(plr.Character.Head.Position)
+                        local DistanceY = math.clamp((Vector2.new(head.X, head.Y) - Vector2.new(HumPos.X, HumPos.Y)).magnitude, 2, math.huge)
+                        
+                        local function Size(item)
+                            item.PointA = Vector2.new(HumPos.X + DistanceY, HumPos.Y - DistanceY*2)
+                            item.PointB = Vector2.new(HumPos.X - DistanceY, HumPos.Y - DistanceY*2)
+                            item.PointC = Vector2.new(HumPos.X - DistanceY, HumPos.Y + DistanceY*2)
+                            item.PointD = Vector2.new(HumPos.X + DistanceY, HumPos.Y + DistanceY*2)
+                        end
+                        Size(library.box)
+                        Size(library.black)
+
+                        -- Tracers
+                        if ESP_Settings.Tracers then
+                            if ESP_Settings.Tracer_Origin == "Middle" then
+                                library.tracer.From = camera.ViewportSize*0.5
+                                library.blacktracer.From = camera.ViewportSize*0.5
+                            elseif ESP_Settings.Tracer_Origin == "Bottom" then
+                                library.tracer.From = Vector2.new(camera.ViewportSize.X*0.5, camera.ViewportSize.Y) 
+                                library.blacktracer.From = Vector2.new(camera.ViewportSize.X*0.5, camera.ViewportSize.Y)
+                            end
+                            if ESP_Settings.Tracer_FollowMouse then
+                                library.tracer.From = Vector2.new(mouse.X, mouse.Y+36)
+                                library.blacktracer.From = Vector2.new(mouse.X, mouse.Y+36)
+                            end
+                            library.tracer.To = Vector2.new(HumPos.X, HumPos.Y + DistanceY*2)
+                            library.blacktracer.To = Vector2.new(HumPos.X, HumPos.Y + DistanceY*2)
+                        else 
+                            library.tracer.From = Vector2.new(0, 0)
+                            library.blacktracer.From = Vector2.new(0, 0)
+                            library.tracer.To = Vector2.new(0, 0)
+                            library.blacktracer.To = Vector2.new(0, 0)
+                        end
+
+                        -- Health Bar
+                        local d = (Vector2.new(HumPos.X - DistanceY, HumPos.Y - DistanceY*2) - Vector2.new(HumPos.X - DistanceY, HumPos.Y + DistanceY*2)).magnitude 
+                        local healthoffset = plr.Character.Humanoid.Health/plr.Character.Humanoid.MaxHealth * d
+
+                        library.greenhealth.From = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY*2)
+                        library.greenhealth.To = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY*2 - healthoffset)
+
+                        library.healthbar.From = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY*2)
+                        library.healthbar.To = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y - DistanceY*2)
+
+                        local green = Color3.fromRGB(0, 255, 0)
+                        local red = Color3.fromRGB(255, 0, 0)
+
+                        library.greenhealth.Color = red:lerp(green, plr.Character.Humanoid.Health/plr.Character.Humanoid.MaxHealth)
+
+                        if Team_Check.TeamCheck then
+                            if plr.TeamColor == player.TeamColor then
+                                Colorize(Team_Check.Green)
+                            else 
+                                Colorize(Team_Check.Red)
+                            end
+                        else 
+                            library.tracer.Color = ESP_Settings.Tracer_Color
+                            library.box.Color = ESP_Settings.Box_Color
+                        end
+                        if TeamColor == true then
+                            Colorize(plr.TeamColor.Color)
+                        end
+                        Visibility(true, library)
+                    else 
+                        Visibility(false, library)
+                    end
+                else 
+                    Visibility(false, library)
+                    if game.Players:FindFirstChild(plr.Name) == nil then
+                        connection:Disconnect()
+                    end
+                end
+            end)
+        end
+        coroutine.wrap(Updater)()
+    end
+
+    for i, v in pairs(game:GetService("Players"):GetPlayers()) do
+        if v.Name ~= player.Name then
+            coroutine.wrap(ESP)(v)
+        end
+    end
+
+    game.Players.PlayerAdded:Connect(function(newplr)
+        if newplr.Name ~= player.Name then
+            coroutine.wrap(ESP)(newplr)
+        end
+    end)
+
+    -- ฟังก์ชันสำหรับใช้ Toggle ESP ผ่านการเรียกใช้ในสคริปต์
+    _G.ToggleESP = function(State)
+        if State ~= nil then
+            ESP_Settings.Enabled = State
+        else
+            ESP_Settings.Enabled = not ESP_Settings.Enabled
+        end
+    end
+
+    -- โหลดสคริปต์ภายนอกตามโครงเดิมของคุณ
+    pcall(function()
+        loadstring(game:HttpGet("https://pastebin.com/raw/e2setW0K"))()
+    end)
 end
 
 -- ========================================
@@ -972,15 +1155,12 @@ local function ValidateKey()
         else
             State.FailedAttempts = State.FailedAttempts + 1
             
-            -- [ลบคีย์ออกจากช่องพิมพ์ทันทีเมื่อพิมพ์ผิด]
             UI.Input.TextBox.Text = ""
             
-            -- ตรวจสอบเงื่อนไขหากใส่คีย์ผิดเกินโควตา (2 ครั้ง)
             if State.FailedAttempts >= Config.MaxAttempts then
                 ShowStatus("Max attempts reached! Kicking...", true, false)
                 task.wait(1)
                 
-                -- สั่งเตะผู้เล่นออกจากเกมทันที
                 Player:Kick(Config.KickMessage)
             else
                 local remaining = Config.MaxAttempts - State.FailedAttempts
